@@ -1,0 +1,310 @@
+import mesa
+import re
+import tkinter as tk
+from tkinter import ttk
+
+# Agente para operaciones de Suma
+class SumaAgent(mesa.Agent):
+    def __init__(self, unique_id, model):
+        super().__init__(unique_id, model)
+        self.operation = "+"
+    
+    def calculate(self, a, b):
+        result = a + b
+        print(f"Agente Suma: {a} + {b} = {result}")
+        return result
+
+# Agente para operaciones de Resta
+class RestaAgent(mesa.Agent):
+    def __init__(self, unique_id, model):
+        super().__init__(unique_id, model)
+        self.operation = "-"
+    
+    def calculate(self, a, b):
+        result = a - b
+        print(f"Agente Resta: {a} - {b} = {result}")
+        return result
+
+# Agente para operaciones de Multiplicación
+class MultiplicacionAgent(mesa.Agent):
+    def __init__(self, unique_id, model):
+        super().__init__(unique_id, model)
+        self.operation = "*"
+    
+    def calculate(self, a, b):
+        result = a * b
+        print(f"Agente Multiplicación: {a} * {b} = {result}")
+        return result
+
+# Agente para operaciones de División
+class DivisionAgent(mesa.Agent):
+    def __init__(self, unique_id, model):
+        super().__init__(unique_id, model)
+        self.operation = "/"
+    
+    def calculate(self, a, b):
+        if b == 0:
+            raise ValueError("División por cero")
+        result = a / b
+        print(f"Agente División: {a} / {b} = {result}")
+        return result
+
+# Agente para operaciones de Potencia
+class PotenciaAgent(mesa.Agent):
+    def __init__(self, unique_id, model):
+        super().__init__(unique_id, model)
+        self.operation = "**"
+    
+    def calculate(self, a, b):
+        result = a ** b
+        print(f"Agente Potencia: {a} ** {b} = {result}")
+        return result
+
+# Agente de Entrada/Salida - Coordinador
+class IOAgent(mesa.Agent):
+    def __init__(self, unique_id, model):
+        super().__init__(unique_id, model)
+        self.result = None
+        self.expression = ""
+    
+    def process_expression(self, expression):
+        """Procesa la expresión matemática"""
+        self.expression = expression
+        print(f"\n=== Agente I/O recibió: {expression} ===")
+        
+        try:
+            # Reemplazar ^ por ** para potencias
+            expression = expression.replace('^', '**')
+            
+            # Evaluar respetando precedencia de operadores
+            result = self.evaluate_with_agents(expression)
+            self.result = result
+            print(f"=== Resultado final: {result} ===\n")
+            return result
+        except Exception as e:
+            print(f"Error: {e}")
+            return f"Error: {e}"
+    
+    def evaluate_with_agents(self, expression):
+        """Evalúa la expresión usando los agentes correspondientes"""
+        # Tokenizar la expresión
+        tokens = re.findall(r'\d+\.?\d*|[+\-*/()]|\*\*', expression)
+        
+        # Convertir a notación postfija (Shunting Yard)
+        postfix = self.infix_to_postfix(tokens)
+        
+        # Evaluar usando pila
+        return self.evaluate_postfix(postfix)
+    
+    def infix_to_postfix(self, tokens):
+        """Convierte notación infija a postfija"""
+        precedence = {'+': 1, '-': 1, '*': 2, '/': 2, '**': 3}
+        right_assoc = {'**'}
+        output = []
+        stack = []
+        
+        for token in tokens:
+            if self.is_number(token):
+                output.append(float(token))
+            elif token in precedence:
+                while (stack and stack[-1] != '(' and
+                       stack[-1] in precedence and
+                       (precedence[stack[-1]] > precedence[token] or
+                        (precedence[stack[-1]] == precedence[token] and 
+                         token not in right_assoc))):
+                    output.append(stack.pop())
+                stack.append(token)
+            elif token == '(':
+                stack.append(token)
+            elif token == ')':
+                while stack and stack[-1] != '(':
+                    output.append(stack.pop())
+                if stack:
+                    stack.pop()
+        
+        while stack:
+            output.append(stack.pop())
+        
+        return output
+    
+    def is_number(self, s):
+        """Verifica si es un número"""
+        try:
+            float(s)
+            return True
+        except ValueError:
+            return False
+    
+    def evaluate_postfix(self, postfix):
+        """Evalúa expresión en notación postfija"""
+        stack = []
+        
+        for token in postfix:
+            if isinstance(token, float):
+                stack.append(token)
+            else:
+                b = stack.pop()
+                a = stack.pop()
+                result = self.delegate_operation(token, a, b)
+                stack.append(result)
+        
+        return stack[0]
+    
+    def delegate_operation(self, operator, a, b):
+        """Delega la operación al agente correspondiente"""
+        agents = self.model.get_operation_agents()
+        
+        if operator == '+':
+            return agents['suma'].calculate(a, b)
+        elif operator == '-':
+            return agents['resta'].calculate(a, b)
+        elif operator == '*':
+            return agents['multiplicacion'].calculate(a, b)
+        elif operator == '/':
+            return agents['division'].calculate(a, b)
+        elif operator == '**':
+            return agents['potencia'].calculate(a, b)
+
+# Modelo de la Calculadora
+class CalculatorModel(mesa.Model):
+    def __init__(self):
+        super().__init__()
+        
+        # Crear agentes de operaciones
+        self.suma_agent = SumaAgent(1, self)
+        self.resta_agent = RestaAgent(2, self)
+        self.multiplicacion_agent = MultiplicacionAgent(3, self)
+        self.division_agent = DivisionAgent(4, self)
+        self.potencia_agent = PotenciaAgent(5, self)
+        
+        # Crear agente de I/O (coordinador)
+        self.io_agent = IOAgent(0, self)
+    
+    def get_operation_agents(self):
+        """Retorna diccionario con los agentes de operaciones"""
+        return {
+            'suma': self.suma_agent,
+            'resta': self.resta_agent,
+            'multiplicacion': self.multiplicacion_agent,
+            'division': self.division_agent,
+            'potencia': self.potencia_agent
+        }
+    
+    def calculate(self, expression):
+        """Procesa una expresión matemática"""
+        return self.io_agent.process_expression(expression)
+
+# Interfaz Gráfica para la Calculadora
+class CalculatorGUI:
+    def __init__(self):
+        self.root = tk.Tk()
+        self.root.title("Calculadora con Agentes - MESA")
+        self.root.geometry("500x600")
+        
+        self.model = CalculatorModel()
+        
+        # Display
+        self.display = tk.Entry(self.root, font=('Arial', 20), 
+                               justify='right', bd=10)
+        self.display.pack(fill=tk.BOTH, padx=10, pady=10)
+        
+        # Frame de botones
+        button_frame = ttk.Frame(self.root)
+        button_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        
+        # Definir botones
+        buttons = [
+            ['7', '8', '9', '/', 'C'],
+            ['4', '5', '6', '*', '('],
+            ['1', '2', '3', '-', ')'],
+            ['0', '.', '=', '+', '^'],
+        ]
+        
+        # Crear botones
+        for i, row in enumerate(buttons):
+            for j, btn_text in enumerate(row):
+                btn = tk.Button(button_frame, text=btn_text, 
+                              font=('Arial', 16), 
+                              command=lambda x=btn_text: self.on_button_click(x))
+                btn.grid(row=i, column=j, sticky='nsew', padx=2, pady=2)
+        
+        # Configurar grid
+        for i in range(4):
+            button_frame.grid_rowconfigure(i, weight=1)
+        for j in range(5):
+            button_frame.grid_columnconfigure(j, weight=1)
+        
+        # Log de comunicación
+        ttk.Label(self.root, text="Log de Comunicación entre Agentes:").pack(pady=5)
+        
+        self.log_frame = tk.Frame(self.root, bd=2, relief=tk.SUNKEN)
+        self.log_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        
+        self.log_text = tk.Text(self.log_frame, height=10, font=('Courier', 9))
+        self.log_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        scrollbar = tk.Scrollbar(self.log_frame, command=self.log_text.yview)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.log_text.config(yscrollcommand=scrollbar.set)
+        
+        # Redirigir print al log
+        import sys
+        sys.stdout = TextRedirector(self.log_text)
+    
+    def on_button_click(self, char):
+        """Maneja los clicks en los botones"""
+        if char == '=':
+            expression = self.display.get()
+            try:
+                result = self.model.calculate(expression)
+                self.display.delete(0, tk.END)
+                self.display.insert(0, str(result))
+            except Exception as e:
+                self.display.delete(0, tk.END)
+                self.display.insert(0, f"Error: {e}")
+        elif char == 'C':
+            self.display.delete(0, tk.END)
+            self.log_text.delete(1.0, tk.END)
+        else:
+            self.display.insert(tk.END, char)
+    
+    def run(self):
+        """Inicia la interfaz"""
+        self.root.mainloop()
+
+# Clase auxiliar para redirigir print al Text widget
+class TextRedirector:
+    def __init__(self, widget):
+        self.widget = widget
+    
+    def write(self, string):
+        self.widget.insert(tk.END, string)
+        self.widget.see(tk.END)
+    
+    def flush(self):
+        pass
+
+# Ejecutar la aplicación
+if __name__ == "__main__":
+    # Ejemplos de prueba desde consola
+    print("=== PRUEBAS DE LA CALCULADORA CON AGENTES ===\n")
+    model = CalculatorModel()
+    
+    test_expressions = [
+        "2 + 3",
+        "5 * 4 + 3",
+        "10 / 2 - 3",
+        "2 + 3 * 4",
+        "2 ** 3",
+        "(2 + 3) * 4",
+        "10 / 2 + 3 * 2"
+    ]
+    
+    for expr in test_expressions:
+        result = model.calculate(expr)
+        print()
+    
+    # Iniciar GUI
+    print("\n=== Iniciando Interfaz Gráfica ===\n")
+    gui = CalculatorGUI()
+    gui.run()
