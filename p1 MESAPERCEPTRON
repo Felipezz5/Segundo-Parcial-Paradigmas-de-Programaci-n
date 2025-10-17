@@ -1,0 +1,242 @@
+import mesa
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import tkinter as tk
+from tkinter import ttk
+
+# Agente Punto de Datos
+class DataPoint(mesa.Agent):
+    def __init__(self, unique_id, model, x, y, label):
+        super().__init__(unique_id, model)
+        self.x = x
+        self.y = y
+        self.label = label  # 1 o -1
+        self.predicted = None
+        self.correct = False
+    
+    def step(self):
+        pass
+
+# Agente Perceptrón
+class Perceptron(mesa.Agent):
+    def __init__(self, unique_id, model, learning_rate):
+        super().__init__(unique_id, model)
+        self.weights = np.random.randn(2) * 0.1
+        self.bias = np.random.randn() * 0.1
+        self.learning_rate = learning_rate
+    
+    def predict(self, x, y):
+        """Realiza una predicción para un punto (x, y)"""
+        activation = np.dot(self.weights, [x, y]) + self.bias
+        return 1 if activation >= 0 else -1
+    
+    def train(self, data_points):
+        """Entrena el perceptrón con los puntos de datos"""
+        for point in data_points:
+            prediction = self.predict(point.x, point.y)
+            error = point.label - prediction
+            
+            # Actualizar pesos si hay error
+            if error != 0:
+                self.weights[0] += self.learning_rate * error * point.x
+                self.weights[1] += self.learning_rate * error * point.y
+                self.bias += self.learning_rate * error
+            
+            point.predicted = prediction
+            point.correct = (prediction == point.label)
+    
+    def get_decision_boundary(self):
+        """Calcula la línea de decisión"""
+        if self.weights[1] != 0:
+            x = np.array([-2, 2])
+            y = -(self.weights[0] * x + self.bias) / self.weights[1]
+            return x, y
+        return None, None
+
+# Modelo del Perceptrón
+class PerceptronModel(mesa.Model):
+    def __init__(self, learning_rate=0.1, n_points=50):
+        super().__init__()
+        self.learning_rate = learning_rate
+        self.current_iteration = 0
+        self.max_iterations = 100
+        
+        # Crear el perceptrón
+        self.perceptron = Perceptron(0, self, learning_rate)
+        
+        # Generar puntos linealmente separables
+        self.data_points = []
+        self.generate_data(n_points)
+        
+        # Crear puntos de prueba
+        self.test_points = []
+        self.generate_test_data(20)
+    
+    def generate_data(self, n_points):
+        """Genera puntos de entrenamiento linealmente separables"""
+        # Línea de separación real: y = 0.5x + 0.2
+        for i in range(n_points):
+            x = np.random.uniform(-1, 1)
+            y = np.random.uniform(-1, 1)
+            
+            # Etiquetar según la línea y = 0.5x + 0.2
+            true_label = 1 if y > (0.5 * x + 0.2) else -1
+            
+            point = DataPoint(i + 1, self, x, y, true_label)
+            self.data_points.append(point)
+    
+    def generate_test_data(self, n_points):
+        """Genera puntos de prueba"""
+        for i in range(n_points):
+            x = np.random.uniform(-1, 1)
+            y = np.random.uniform(-1, 1)
+            true_label = 1 if y > (0.5 * x + 0.2) else -1
+            point = DataPoint(1000 + i, self, x, y, true_label)
+            self.test_points.append(point)
+    
+    def step(self):
+        """Un paso de entrenamiento"""
+        if self.current_iteration < self.max_iterations:
+            self.perceptron.train(self.data_points)
+            self.current_iteration += 1
+    
+    def evaluate(self):
+        """Evalúa el perceptrón con datos de prueba"""
+        correct = 0
+        for point in self.test_points:
+            prediction = self.perceptron.predict(point.x, point.y)
+            if prediction == point.label:
+                correct += 1
+        return (correct / len(self.test_points)) * 100
+
+# Interfaz Gráfica
+class PerceptronGUI:
+    def __init__(self):
+        self.root = tk.Tk()
+        self.root.title("Simulación Perceptrón con MESA")
+        self.root.geometry("900x700")
+        
+        self.model = None
+        self.is_training = False
+        
+        # Frame de controles
+        control_frame = ttk.Frame(self.root, padding="10")
+        control_frame.pack(side=tk.TOP, fill=tk.X)
+        
+        # Tasa de aprendizaje
+        ttk.Label(control_frame, text="Tasa de Aprendizaje:").grid(row=0, column=0, sticky=tk.W)
+        self.lr_var = tk.DoubleVar(value=0.1)
+        self.lr_slider = ttk.Scale(control_frame, from_=0.01, to=0.5, 
+                                    variable=self.lr_var, orient=tk.HORIZONTAL, length=200)
+        self.lr_slider.grid(row=0, column=1, padx=5)
+        self.lr_label = ttk.Label(control_frame, text="0.1")
+        self.lr_label.grid(row=0, column=2)
+        
+        # Número de iteraciones
+        ttk.Label(control_frame, text="Máx. Iteraciones:").grid(row=1, column=0, sticky=tk.W)
+        self.iter_var = tk.IntVar(value=100)
+        self.iter_slider = ttk.Scale(control_frame, from_=10, to=500, 
+                                      variable=self.iter_var, orient=tk.HORIZONTAL, length=200)
+        self.iter_slider.grid(row=1, column=1, padx=5)
+        self.iter_label = ttk.Label(control_frame, text="100")
+        self.iter_label.grid(row=1, column=2)
+        
+        # Botones
+        button_frame = ttk.Frame(control_frame)
+        button_frame.grid(row=2, column=0, columnspan=3, pady=10)
+        
+        self.start_btn = ttk.Button(button_frame, text="Iniciar Entrenamiento", 
+                                     command=self.start_training)
+        self.start_btn.pack(side=tk.LEFT, padx=5)
+        
+        self.reset_btn = ttk.Button(button_frame, text="Restablecer", 
+                                     command=self.reset_simulation)
+        self.reset_btn.pack(side=tk.LEFT, padx=5)
+        
+        self.eval_btn = ttk.Button(button_frame, text="Evaluar", 
+                                    command=self.evaluate_model)
+        self.eval_btn.pack(side=tk.LEFT, padx=5)
+        
+        # Label de información
+        self.info_label = ttk.Label(control_frame, text="Iteración: 0 | Precisión: N/A")
+        self.info_label.grid(row=3, column=0, columnspan=3, pady=5)
+        
+        # Canvas para matplotlib
+        self.fig, self.ax = plt.subplots(figsize=(8, 6))
+        self.canvas = FigureCanvasTkAgg(self.fig, master=self.root)
+        self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        
+        # Actualizar labels
+        self.lr_var.trace('w', lambda *args: self.lr_label.config(text=f"{self.lr_var.get():.2f}"))
+        self.iter_var.trace('w', lambda *args: self.iter_label.config(text=f"{self.iter_var.get()}"))
+        
+        self.reset_simulation()
+    
+    def reset_simulation(self):
+        """Reinicia la simulación"""
+        self.is_training = False
+        self.model = PerceptronModel(learning_rate=self.lr_var.get())
+        self.model.max_iterations = self.iter_var.get()
+        self.update_plot()
+        self.info_label.config(text="Iteración: 0 | Precisión: N/A")
+    
+    def start_training(self):
+        """Inicia el entrenamiento"""
+        if not self.is_training:
+            self.is_training = True
+            self.train_step()
+    
+    def train_step(self):
+        """Ejecuta un paso de entrenamiento"""
+        if self.is_training and self.model.current_iteration < self.model.max_iterations:
+            self.model.step()
+            self.update_plot()
+            self.info_label.config(text=f"Iteración: {self.model.current_iteration}")
+            self.root.after(50, self.train_step)
+        else:
+            self.is_training = False
+    
+    def evaluate_model(self):
+        """Evalúa el modelo con datos de prueba"""
+        accuracy = self.model.evaluate()
+        self.info_label.config(text=f"Iteración: {self.model.current_iteration} | Precisión: {accuracy:.1f}%")
+    
+    def update_plot(self):
+        """Actualiza la visualización"""
+        self.ax.clear()
+        
+        # Dibujar puntos de entrenamiento
+        for point in self.model.data_points:
+            color = 'green' if point.correct else 'red'
+            marker = 'o' if point.label == 1 else 's'
+            self.ax.scatter(point.x, point.y, c=color, marker=marker, s=50, alpha=0.6)
+        
+        # Dibujar línea de decisión
+        x_line, y_line = self.model.perceptron.get_decision_boundary()
+        if x_line is not None:
+            self.ax.plot(x_line, y_line, 'b-', linewidth=2, label='Línea de Decisión')
+        
+        # Dibujar línea real de separación
+        x_real = np.array([-1, 1])
+        y_real = 0.5 * x_real + 0.2
+        self.ax.plot(x_real, y_real, 'g--', linewidth=2, label='Línea Real', alpha=0.5)
+        
+        self.ax.set_xlim(-1.2, 1.2)
+        self.ax.set_ylim(-1.2, 1.2)
+        self.ax.set_xlabel('X')
+        self.ax.set_ylabel('Y')
+        self.ax.set_title('Entrenamiento del Perceptrón')
+        self.ax.legend()
+        self.ax.grid(True, alpha=0.3)
+        
+        self.canvas.draw()
+    
+    def run(self):
+        """Inicia la interfaz gráfica"""
+        self.root.mainloop()
+
+# Ejecutar la aplicación
+if __name__ == "__main__":
+    gui = PerceptronGUI()
+    gui.run()
