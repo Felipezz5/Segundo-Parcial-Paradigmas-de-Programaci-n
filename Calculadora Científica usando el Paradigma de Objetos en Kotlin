@@ -1,0 +1,195 @@
+  private fun evaluarPostfix(postfix: List<String>): Double {
+        val pila = Stack<Double>()
+        
+        for (token in postfix) {
+            when (token) {
+                "+", "-", "*", "/", "^" -> {
+                    val b = pila.pop()
+                    val a = pila.pop()
+                    val resultado = when (token) {
+                        "+" -> sumar(a, b)
+                        "-" -> restar(a, b)
+                        "*" -> multiplicar(a, b)
+                        "/" -> dividir(a, b)
+                        "^" -> potencia(a, b)
+                        else -> 0.0
+                    }
+                    pila.push(resultado)
+                }
+                else -> pila.push(token.toDouble())
+            }
+        }
+        
+        return pila.pop()
+    }
+}
+
+// Interfaz Gráfica con Swing
+class CalculadoraGUI : JFrame() {
+    private val calculadora = CalculadoraCientifica()
+    private val display = JTextField()
+    private var modoRadianes = false
+    
+    init {
+        title = "Calculadora Científica - Kotlin POO"
+        defaultCloseOperation = EXIT_ON_CLOSE
+        setSize(600, 700)
+        layout = BorderLayout()
+        
+        // Display
+        display.font = Font("Arial", Font.BOLD, 24)
+        display.horizontalAlignment = JTextField.RIGHT
+        display.isEditable = false
+        display.background = Color.WHITE
+        add(display, BorderLayout.NORTH)
+        
+        // Panel principal
+        val mainPanel = JPanel(GridLayout(1, 2, 5, 5))
+        
+        // Panel científico (izquierda)
+        val cientificoPanel = JPanel(GridLayout(6, 3, 3, 3))
+        val botonesCientificos = arrayOf(
+            arrayOf("sin", "cos", "tan"),
+            arrayOf("asin", "acos", "atan"),
+            arrayOf("√", "x²", "xʸ"),
+            arrayOf("ln", "log", "eˣ"),
+            arrayOf("π", "e", "DEG"),
+            arrayOf("M+", "M-", "MR")
+        )
+        
+        for (fila in botonesCientificos) {
+            for (texto in fila) {
+                val boton = crearBoton(texto)
+                cientificoPanel.add(boton)
+            }
+        }
+        
+        // Panel básico (derecha)
+        val basicoPanel = JPanel(GridLayout(5, 4, 3, 3))
+        val botonesBasicos = arrayOf(
+            arrayOf("7", "8", "9", "÷"),
+            arrayOf("4", "5", "6", "×"),
+            arrayOf("1", "2", "3", "-"),
+            arrayOf("0", ".", "=", "+"),
+            arrayOf("C", "CE", "(", ")")
+        )
+        
+        for (fila in botonesBasicos) {
+            for (texto in fila) {
+                val boton = crearBoton(texto)
+                basicoPanel.add(boton)
+            }
+        }
+        
+        mainPanel.add(cientificoPanel)
+        mainPanel.add(basicoPanel)
+        add(mainPanel, BorderLayout.CENTER)
+        
+        setLocationRelativeTo(null)
+    }
+    
+    private fun crearBoton(texto: String): JButton {
+        val boton = JButton(texto)
+        boton.font = Font("Arial", Font.BOLD, 14)
+        boton.addActionListener { procesarBoton(texto) }
+        
+        // Colores
+        when (texto) {
+            "C", "CE" -> boton.background = Color(255, 100, 100)
+            "=" -> boton.background = Color(100, 200, 100)
+            in listOf("+", "-", "×", "÷") -> boton.background = Color(200, 200, 255)
+            else -> boton.background = Color(240, 240, 240)
+        }
+        
+        return boton
+    }
+    
+    private fun procesarBoton(texto: String) {
+        try {
+            when (texto) {
+                "C" -> display.text = ""
+                "CE" -> display.text = display.text.dropLast(1)
+                "=" -> calcular()
+                "sin" -> aplicarFuncion { calculadora.seno(it, !modoRadianes) }
+                "cos" -> aplicarFuncion { calculadora.coseno(it, !modoRadianes) }
+                "tan" -> aplicarFuncion { calculadora.tangente(it, !modoRadianes) }
+                "asin" -> aplicarFuncion { calculadora.arcoseno(it) }
+                "acos" -> aplicarFuncion { calculadora.arcocoseno(it) }
+                "atan" -> aplicarFuncion { calculadora.arcotangente(it) }
+                "√" -> aplicarFuncion { calculadora.raizCuadrada(it) }
+                "x²" -> aplicarFuncion { calculadora.potencia(it, 2.0) }
+                "xʸ" -> display.text += "^"
+                "ln" -> aplicarFuncion { calculadora.logaritmoNatural(it) }
+                "log" -> aplicarFuncion { calculadora.logaritmoBase10(it) }
+                "eˣ" -> aplicarFuncion { calculadora.exponencial(it) }
+                "π" -> display.text += Math.PI.toString()
+                "e" -> display.text += Math.E.toString()
+                "DEG" -> {
+                    modoRadianes = !modoRadianes
+                    JOptionPane.showMessageDialog(this, 
+                        "Modo: ${if (modoRadianes) "RADIANES" else "GRADOS"}")
+                }
+                "M+" -> calculadora.memoriaAgregar(obtenerValorDisplay())
+                "M-" -> calculadora.memoriaRestar(obtenerValorDisplay())
+                "MR" -> display.text = calculadora.memoriaRecuperar().toString()
+                "×" -> display.text += "*"
+                "÷" -> display.text += "/"
+                else -> display.text += texto
+            }
+        } catch (e: Exception) {
+            JOptionPane.showMessageDialog(this, e.message, "Error", 
+                JOptionPane.ERROR_MESSAGE)
+        }
+    }
+    
+    private fun aplicarFuncion(funcion: (Double) -> Double) {
+        val valor = obtenerValorDisplay()
+        display.text = funcion(valor).toString()
+    }
+    
+    private fun obtenerValorDisplay(): Double {
+        return display.text.toDoubleOrNull() ?: 0.0
+    }
+    
+    private fun calcular() {
+        val expresion = display.text
+        val resultado = calculadora.evaluarExpresion(expresion)
+        display.text = resultado.toString()
+    }
+}
+
+// Main
+fun main() {
+    // Pruebas en consola
+    println("=== CALCULADORA CIENTÍFICA - KOTLIN POO ===\n")
+    val calc = CalculadoraCientifica()
+    
+    println("1. Operaciones básicas:")
+    println("   5 + 3 = ${calc.sumar(5.0, 3.0)}")
+    println("   10 - 4 = ${calc.restar(10.0, 4.0)}")
+    println("   6 × 7 = ${calc.multiplicar(6.0, 7.0)}")
+    println("   20 ÷ 4 = ${calc.dividir(20.0, 4.0)}")
+    
+    println("\n2. Funciones trigonométricas:")
+    println("   sin(30°) = ${calc.seno(30.0)}")
+    println("   cos(60°) = ${calc.coseno(60.0)}")
+    println("   tan(45°) = ${calc.tangente(45.0)}")
+    
+    println("\n3. Potencias y raíces:")
+    println("   2³ = ${calc.potencia(2.0, 3.0)}")
+    println("   √16 = ${calc.raizCuadrada(16.0)}")
+    println("   ³√27 = ${calc.raizCubica(27.0)}")
+    
+    println("\n4. Logaritmos:")
+    println("   ln(e) = ${calc.logaritmoNatural(Math.E)}")
+    println("   log₁₀(100) = ${calc.logaritmoBase10(100.0)}")
+    
+    println("\n5. Evaluación de expresiones:")
+    println("   2 + 3 * 4 = ${calc.evaluarExpresion("2+3*4")}")
+    println("   sin(30) + log(10) = ${calc.evaluarExpresion("sin(30)+log(10)")}")
+    
+    // Iniciar GUI
+    SwingUtilities.invokeLater {
+        CalculadoraGUI().isVisible = true
+    }
+}
